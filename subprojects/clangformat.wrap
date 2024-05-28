@@ -1,0 +1,4 @@
+[wrap-git]
+url=https://github.com/dontblink/clangformat
+revision=9ef0be9acd4c6b3e68ace3b1033666c989a2ddcc
+patch_directory=clangformat
