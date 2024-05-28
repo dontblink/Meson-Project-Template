@@ -1,41 +1,43 @@
 #!/bin/bash
 
-# Function to exclude specified directories and files
-exclude_items() {
-    local source_dir="$1"
-    shift
-    local excludes=("$@")
-
-    # Prepare the exclusion pattern
-    local exclusion_pattern=""
-    for exclude in "${excludes[@]}"; do
-        exclusion_pattern+=" ! -path '*$exclude*' "
-    done
-
-    # Find files and directories excluding specified ones
-    find "$source_dir" -type f $exclusion_pattern -print
-}
-
 # Function to create test directories and files
 create_test_files() {
     local source_dir="$1"
     local test_dir="$2"
+    local exclude_dirs=("${@:3}")
 
     # Create test directory if it doesn't exist
     mkdir -p "$test_dir"
 
     # Loop through files in source directory
-    while IFS= read -r file; do
-        if [ -d "$file" ]; then
-            # If it's a directory, create corresponding directory in test directory
-            subdir="${file#$source_dir}"
-            mkdir -p "$test_dir$subdir"
-        elif [[ "$file" == *.c ]]; then
-            # If it's a .c file, create a test file with test_ prefix
-            filename=$(basename "$file")
-            cp "$file" "$test_dir/test_$filename"
+    while IFS= read -r -d '' file; do
+        # Get the directory of the file
+        file_dir=$(dirname "$file")
+
+        # Check if the file directory is excluded
+        excluded=false
+        for exclude_dir in "${exclude_dirs[@]}"; do
+            if [[ "$file_dir" == *"$exclude_dir"* ]]; then
+                excluded=true
+                break
+            fi
+        done
+
+        if [ "$excluded" = false ]; then
+            # Remove the source directory path from the file path
+            relative_path=${file#$source_dir/}
+
+            # Create corresponding directory structure in test directory
+            mkdir -p "$test_dir/$(dirname "$relative_path")"
+
+            # Generate new file name with "test_" prefix
+            new_file="$test_dir/$(dirname "$relative_path")/test_$(basename "$file")"
+
+            # Create new file with "test_" prefix
+            touch "$new_file"
+            echo "Created new file: $new_file"
         fi
-    done < <(exclude_items "$source_dir" "${excludes[@]}")
+    done < <(find "$source_dir" -type f -name "*.c" -print0)
 }
 
 # Main script
@@ -55,11 +57,12 @@ shift 2
 # Check if any excludes were provided
 if [ "$#" -eq 0 ]; then
     echo "No excludes provided. Proceeding without exclusions."
-    excludes=()
+    exclude_dirs=()
 else
-    # Create array of excluded items
-    excludes=("$@")
+    # Create array of excluded directories
+    exclude_dirs=("$@")
+    echo "Excluding directories: ${exclude_dirs[*]}"
 fi
 
 # Create test directories and files
-create_test_files "$source_dir" "$test_dir"
+create_test_files "$source_dir" "$test_dir" "${exclude_dirs[@]}"
